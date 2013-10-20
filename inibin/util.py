@@ -16,18 +16,20 @@ def _take_bits(buf, count):
     return values
 
 
-def _fix_keys(key_mapping, inibin, string_table):
+def _fix_keys(key_mapping, inibin, string_table=None):
     """
-    Create a human-readable dictionary of the values in inibin.
+    Return a human-readable dictionary from the inibin.
 
     Arguments:
     key_mapping -- Dictionary used for conversion. Supports nesting. Every other
         value should be a numeric inibin key, or a tuple of the key and a
-        function to apply to the result
-    inibin -- The dictionary returned from reading an inibin
-    string_table -- The dictionary loaded from fontconfig_en_US.txt. Strings in
-        the inibin are often keys of this dictionary
+        function to apply to the result.
+    inibin -- The dictionary returned from reading an inibin.
+    string_table -- Used to translate strings. Any string with a key in
+        string_table will be replaced. Typically loaded from a fontconfig_*.txt.
     """
+    if string_table is None:
+        string_table = {}
 
     def walk(node, out_node):
         # Walk the nodes of the key mapping

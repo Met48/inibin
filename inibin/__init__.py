@@ -48,37 +48,36 @@ class Inibin(dict):
     string_table_length = 0
     flags = 0
 
-    def __init__(self, buffer, font_config=None,
-                 kind=None, fix_keys=True, **kwargs):
+    def __init__(self, fileobj=None, data=None, **kwargs):
         """
-        Arguments:
-        buffer -- file-like object or string to read the inibin from. Data must
-            have been read in binary mode.
-        font_config -- a dictionary representation of fontconfig_en_US.txt
-        kind -- either 'CHARACTER' or 'ABILITY' (default CHARACTER)
-
+        Inibin can be loaded using either of these parameters:
+        fileobj -- file-like object. Must have been opened in binary mode.
+        data -- string.
         """
         super(Inibin, self).__init__(**kwargs)
 
-        if not hasattr(buffer, 'read'):
-            buffer = StringIO(buffer)
-        self.buffer = buffer
+        if not fileobj and not data:
+            raise TypeError("Must provide one of fileobj and data.")
+        if data:
+            fileobj = StringIO(data)
+        self.buffer = fileobj
 
         data = self._read_inibin()
 
         self.clear()
         self.update(data)
 
-    def as_character(self, string_lookup):
-        """Interpret the inibin as a character file. """
-        self._translate(maps.CHARACTER, string_lookup)
+    def as_character(self, string_table=None):
+        """Return a dictionary of the inibin interpreted as a character."""
+        return self._translate(maps.CHARACTER, string_table)
 
-    def as_ability(self, string_lookup):
-        """Interpret the inibin as an ability file. """
-        self._translate(maps.ABILITY, string_lookup)
+    def as_ability(self, string_table=None):
+        """Return a dictionary of the inibin interpreted as an ability."""
+        return self._translate(maps.ABILITY, string_table)
 
-    def _translate(self, key_mapping, string_lookup):
-        return _fix_keys(key_mapping, self, string_lookup)
+    def _translate(self, key_mapping, string_table):
+        """Return a dictionary of the inibin interpreted using key_mapping."""
+        return _fix_keys(key_mapping, self, string_table)
 
     def _read_inibin(self):
         self._read_header()
@@ -171,23 +170,3 @@ class Inibin(dict):
         values = [strings[v:].partition('\x00')[0] for v in offsets]
 
         return dict(zip(keys, values))
-
-
-def main():
-    from pprint import pprint
-    import sys
-    assert len(sys.argv) in (2, 3)
-    with open(sys.argv[-1], 'rb') as f:
-        data = f.read()
-    if len(sys.argv) == 3:
-        fix_keys = True
-        kind = sys.argv[1]
-    else:
-        fix_keys = False
-        kind = None
-    inibin = Inibin(data, {}, kind, fix_keys)
-    pprint(inibin)
-
-
-if __name__ == '__main__':
-    main()
