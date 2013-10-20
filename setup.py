@@ -8,7 +8,7 @@ setup(
     license='MIT',
     author='Andrew Sutton',
     author_email='me@andrewcsutton.com',
-    description='A pure python library for reading League of Legends inibin files.',
+    description='A library for reading League of Legends inibin files.',
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
