@@ -1,4 +1,7 @@
-import StringIO
+try:
+    import StringIO
+except ImportError:
+    from io import StringIO
 import struct
 
 def _take_bits(buf, count):
