@@ -55,20 +55,23 @@ class Inibin(dict):
         self.buffer = buffer
 
         # Parse inibin
-        data = self.read_inibin()
+        data = self._read_inibin()
 
         # Convert the mapping to be more human-readable
         if self.fix_keys:
             import maps
             from maps import CHARACTER, ABILITY
             assert hasattr(maps, self.kind)
-            mapping = _fix_keys(getattr(maps, self.kind), data, self.font_config)
+            data = _fix_keys(getattr(maps, self.kind), data, self.font_config)
 
-        self.data = data
+        # Update dictionary
+        self.clear()
+        self.update(data)
 
-    def read_inibin(self):
-        buffer = self.buffer
-        mapping = {}
+    def _read_inibin(self):
+        self._read_header()
+
+        data = {}
 
         # Abort if an unrecognized flag is present
         masked_flags = self.flags & (~Inibin.RECOGNIZED_FLAGS)
@@ -82,15 +85,15 @@ class Inibin(dict):
 
             mapping_update = self._process_flag(row)
             for key, value in mapping_update.items():
-                assert key not in mapping
-                mapping[key] = value
+                assert key not in data
+                data[key] = value
 
         # There should be no non-padding bytes remaining
-        remaining = buffer.read()
+        remaining = self.buffer.read()
         if len(remaining) > 0 and not all(c == '\x00' for c in remaining):
             raise IOError("%i bytes remaining" % len(remaining))
 
-        return mapping
+        return data
 
     def _read_header(self):
         self.version = _unpack_from(self.buffer, 'B')
@@ -101,16 +104,6 @@ class Inibin(dict):
         self.str_len = _unpack_from(self.buffer, 'H')
 
         self.flags = _unpack_from(self.buffer, 'H')
-
-    def _read_string_table(self):
-        # Must only be called after all flags have been read
-        count = _unpack_from(self.buffer, 'H')
-        keys = _unpack_from(self.buffer, 'i', count)
-        values = _unpack_from(self.buffer, 'H', count)
-        strings = self.buffer.read(self.str_len)
-        values = [strings[v:].partition('\x00')[0] for v in values]
-
-        return dict(zip(keys, values))
 
     def _process_flag(self, flag_definition):
         if flag_definition[1] is None:
@@ -155,10 +148,14 @@ class Inibin(dict):
             values = values_out
             del values_out
 
-        # Update mapping
-        mapping = {}
-        for key, value in zip(keys, values):
-            assert key not in mapping
-            mapping[key] = value
+        return dict(zip(keys, values))
 
-        return mapping
+    def _read_string_table(self):
+        # Must only be called after all flags have been read
+        count = _unpack_from(self.buffer, 'H')
+        keys = _unpack_from(self.buffer, 'i', count)
+        offsets = _unpack_from(self.buffer, 'H', count)
+        strings = self.buffer.read(self.str_len)
+        values = [strings[v:].partition('\x00')[0] for v in offsets]
+
+        return dict(zip(keys, values))
