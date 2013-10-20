@@ -16,16 +16,16 @@ def _take_bits(buf, count):
     return values
 
 
-def _fix_keys(key_mapping, inibin_mapping, font_config):
+def _fix_keys(key_mapping, inibin, string_table):
     """
-    Create a human-readable dictionary of the values in inibin_mapping.
+    Create a human-readable dictionary of the values in inibin.
 
     Arguments:
     key_mapping -- Dictionary used for conversion. Supports nesting. Every other
         value should be a numeric inibin key, or a tuple of the key and a
         function to apply to the result
-    inibin_mapping -- The dictionary returned from reading an inibin
-    font_config -- The dictionary loaded from fontconfig_en_US.txt. Strings in
+    inibin -- The dictionary returned from reading an inibin
+    string_table -- The dictionary loaded from fontconfig_en_US.txt. Strings in
         the inibin are often keys of this dictionary
     """
 
@@ -45,11 +45,11 @@ def _fix_keys(key_mapping, inibin_mapping, font_config):
                 else:
                     index = value
 
-                if index is None or index not in inibin_mapping:
+                if index is None or index not in inibin:
                     out_node[key] = None
                     continue
 
-                val = inibin_mapping[index]
+                val = inibin[index]
 
                 # Try numeric conversion
                 # Inibins often store numbers in strings
@@ -63,8 +63,8 @@ def _fix_keys(key_mapping, inibin_mapping, font_config):
                             pass
 
                 # Check if value is a reference to a fontconfig key
-                if val in font_config:
-                    val = font_config[val]
+                if val in string_table:
+                    val = string_table[val]
 
                 # Apply the function
                 if callable(func):

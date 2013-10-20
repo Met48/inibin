@@ -8,7 +8,7 @@ Champion and ability inibins are supported.
 """
 
 try:
-    import StringIO
+    from StringIO import StringIO
 except ImportError:
     from io import StringIO
 
@@ -40,40 +40,34 @@ class Inibin(dict):
     RECOGNIZED_FLAGS = reduce(lambda a, b: a | b, (f[0] for f in FLAGS), 0)
 
     version = 0
+    str_len = 0
+    flags = 0
 
-    def __init__(self, buffer, font_config=None, kind=None, fix_keys=True):
+    def __init__(self, buffer, font_config=None,
+                 kind=None, fix_keys=True, **kwargs):
         """
         Arguments:
-        buffer -- file-like object or string with the inibin's contents. Make sure the file
-            was opened in binary mode.
+        buffer -- file-like object or string to read the inibin from. Data must
+            have been read in binary mode.
         font_config -- a dictionary representation of fontconfig_en_US.txt
-        kind -- either 'CHARACTER' or 'ABILITY' (default 'CHARACTER')
+        kind -- either 'CHARACTER' or 'ABILITY' (default CHARACTER)
 
         """
-        self.font_config = font_config
-        self.kind = kind
-        self.fix_keys = fix_keys
+        super(Inibin, self).__init__(**kwargs)
 
-        self.load_from(buffer)
-
-    def load_from(self, buffer):
-        """Load this instance from a new buffer."""
-        # Normalize buffer parameter
         if not hasattr(buffer, 'read'):
-            buf = StringIO.StringIO(buffer)
+            buffer = StringIO(buffer)
         self.buffer = buffer
 
-        # Parse inibin
         data = self._read_inibin()
 
-        # Convert the mapping to be more human-readable
-        if self.fix_keys:
+        if fix_keys:
             import maps
             from maps import CHARACTER, ABILITY
-            assert hasattr(maps, self.kind)
-            data = _fix_keys(getattr(maps, self.kind), data, self.font_config)
 
-        # Update dictionary
+            assert hasattr(maps, kind)
+            data = _fix_keys(getattr(maps, kind), data, font_config)
+
         self.clear()
         self.update(data)
 
@@ -183,7 +177,7 @@ def main():
         fix_keys = False
         kind = None
     inibin = Inibin(data, {}, kind, fix_keys)
-    pprint(inibin.data)
+    pprint(inibin)
 
 
 if __name__ == '__main__':
