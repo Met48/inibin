@@ -2,105 +2,8 @@ try:
     import StringIO
 except ImportError:
     from io import StringIO
-import struct
 
-def _take_bits(buf, count):
-    """Return the booleans that were packed into bytes."""
-
-    # TODO: Verify output
-    bytes_count = (count + 7) // 8
-    bytes_mod = count % 8
-    data = _unpack_from(buf, 'B', bytes_count)
-    values = []
-    for i, byte in enumerate(data):
-        for _ in range(8 if i != bytes_count - 1 else bytes_mod):
-            # TODO: Convert to True / False
-            values.append(byte & 0b10000000)
-            byte <<= 1
-    return values
-
-
-def _fix_keys(key_mapping, inibin_mapping, font_config):
-    """
-    Create a human-readable dictionary of the values in inibin_mapping.
-
-    Arguments:
-    key_mapping -- Dictionary used for conversion. Supports nesting. Every other
-        value should be a numeric inibin key, or a tuple of the key and a
-        function to apply to the result
-    inibin_mapping -- The dictionary returned from reading an inibin
-    font_config -- The dictionary loaded from fontconfig_en_US.txt. Strings in
-        the inibin are often keys of this dictionary
-    """
-
-    def walk(node, out_node):
-        # Walk the nodes of the key mapping
-        for key, value in node.items():
-            if isinstance(value, dict):
-                if key not in out_node:
-                    out_node[key] = {}
-                walk(value, out_node[key])
-            else:
-                # Can either be just the index, or the index plus a function to apply
-                func = None
-                if isinstance(value, tuple):
-                    func = value[-1]
-                    index = value[0]
-                else:
-                    index = value
-
-                if index is None or index not in inibin_mapping:
-                    out_node[key] = None
-                    continue
-
-                val = inibin_mapping[index]
-
-                # Try numeric conversion
-                # Inibins often store numbers in strings
-                if isinstance(val, str):
-                    try:
-                        val = int(val)
-                    except ValueError:
-                        try:
-                            val = float(val)
-                        except ValueError:
-                            pass
-
-                # Check if value is a reference to a fontconfig key
-                if val in font_config:
-                    val = font_config[val]
-
-                # Apply the function
-                if callable(func):
-                    val = func(val)
-
-                out_node[key] = val
-
-    out = {}
-    walk(key_mapping, out)
-
-    return out
-
-
-def _unpack_from(buf, format_s, count=None, little_endian=True):
-    """Read a binary format from the buffer."""
-
-    if count is not None:
-        assert count > 0
-        format_s = '%i%s' % (count, format_s)
-
-    if little_endian is True:
-        format_s = '<' + format_s
-    else:
-        format_s = '>' + format_s
-
-    size = struct.calcsize(format_s)
-    res = struct.unpack_from(format_s, buf.read(size))
-
-    if count is not None:
-        return res
-    else:
-        return res[0]
+from util import _unpack_from, _take_bits, _fix_keys
 
 
 class Inibin(dict):
@@ -112,7 +15,7 @@ class Inibin(dict):
     """
     # Flag constants
     # Flags are listed in the order their data appears in the file.
-    # Each flag is (bitmask, [quantity,] function_or_format)
+    # Each line (bit_mask, [quantity,] function_or_format)
     FLAGS = [
         (0b0000000000000001, 'i'),  # Signed?
         (0b0000000000000010, 'f'),
@@ -163,21 +66,31 @@ class Inibin(dict):
 
         self.data = data
 
-    @staticmethod
-    def _lookup_in_string_table(buffer, flags, mapping, str_len):
-        # String table
-        # TODO: Move this into its own function
-        if flags & 0b0001000000000000:
-            count = _unpack_from(buffer, 'H')
-            keys = _unpack_from(buffer, 'i', count)
-            values = _unpack_from(buffer, 'H', count)
-            strings = buffer.read(str_len)
-            mapping['raw_strings'] = strings  # For debug
-            values = [strings[v:].partition('\x00')[0] for v in values]
+    def read_inibin(self):
+        buffer = self.buffer
+        mapping = {}
 
-            for key, value in zip(keys, values):
+        # Abort if an unrecognized flag is present
+        masked_flags = self.flags & (~Inibin.RECOGNIZED_FLAGS)
+        if masked_flags != 0:
+            raise IOError("Unrecognized flags: %s" % bin(masked_flags))
+
+        # Inibin v2 blocks
+        for row in Inibin.FLAGS:
+            if not row[0] & self.flags:
+                continue
+
+            mapping_update = self._process_flag(row)
+            for key, value in mapping_update.items():
                 assert key not in mapping
                 mapping[key] = value
+
+        # There should be no non-padding bytes remaining
+        remaining = buffer.read()
+        if len(remaining) > 0 and not all(c == '\x00' for c in remaining):
+            raise IOError("%i bytes remaining" % len(remaining))
+
+        return mapping
 
     def _read_header(self):
         self.version = _unpack_from(self.buffer, 'B')
@@ -189,10 +102,20 @@ class Inibin(dict):
 
         self.flags = _unpack_from(self.buffer, 'H')
 
-    def _process_flag(self, flag_defn, mapping):
-        if flag_defn[1] is None:
-            # String table must be handled differently
-            return
+    def _read_string_table(self):
+        # Must only be called after all flags have been read
+        count = _unpack_from(self.buffer, 'H')
+        keys = _unpack_from(self.buffer, 'i', count)
+        values = _unpack_from(self.buffer, 'H', count)
+        strings = self.buffer.read(self.str_len)
+        values = [strings[v:].partition('\x00')[0] for v in values]
+
+        return dict(zip(keys, values))
+
+    def _process_flag(self, flag_definition):
+        if flag_definition[1] is None:
+            # String table is handled differently
+            return self._read_string_table()
 
         # Read number of keys
         count = _unpack_from(self.buffer, 'H')
@@ -201,23 +124,23 @@ class Inibin(dict):
         # Does the flag specify multiple values per key?
         per_count = 1
         try:
-            per_count = int(flag_defn[1])
+            per_count = int(flag_definition[1])
         except (ValueError, TypeError):
             pass
         else:
             # Remove multiplier from the row
-            flag_defn = [flag_defn[0]] + list(flag_defn[2:])
+            flag_definition = [flag_definition[0]] + list(flag_definition[2:])
 
         # Read values
-        if isinstance(flag_defn[1], basestring):
-            values = _unpack_from(self.buffer, flag_defn[1], per_count * count)
+        if isinstance(flag_definition[1], basestring):
+            values = _unpack_from(self.buffer, flag_definition[1], per_count * count)
 
             # Apply row functions (if any)
-            for transform in flag_defn[2:]:
+            for transform in flag_definition[2:]:
                 values = [transform(v) for v in values]
-        elif callable(flag_defn[1]):
+        elif callable(flag_definition[1]):
             # Custom function (ex. bits)
-            values = flag_defn[1](self.buffer, count)
+            values = flag_definition[1](self.buffer, count)
         else:
             raise RuntimeError("Unknown operation.")
 
@@ -233,33 +156,9 @@ class Inibin(dict):
             del values_out
 
         # Update mapping
+        mapping = {}
         for key, value in zip(keys, values):
             assert key not in mapping
             mapping[key] = value
-
-    def read_inibin(self):
-        buffer = self.buffer
-        mapping = {}
-
-        # Abort if an unrecognized flag is present
-        masked_flags = self.flags & (~Inibin.RECOGNIZED_FLAGS)
-        if masked_flags != 0:
-            raise IOError("Unrecognized flags: %s" % bin(masked_flags))
-
-        # Inibin v2 blocks
-        # Flags are in the order they would appear in the file in
-        for row in Inibin.FLAGS:
-            if not row[0] & self.flags:
-                continue
-
-            self._process_flag(row, mapping)
-
-
-        self._lookup_in_string_table(buffer, self.flags, mapping, self.str_len)
-
-        # There should be no non-padding bytes remaining
-        remaining = buffer.read()
-        if len(remaining) > 0 and not all(c == '\x00' for c in remaining):
-            raise IOError("%i bytes remaining" % len(remaining))
 
         return mapping
