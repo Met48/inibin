@@ -4,7 +4,7 @@
 
 Arguments:
   <file> -- path to an inibin file
-  <kind> -- what to interpret the inibin as, must be character or ability
+  <kind> -- what to interpret the inibin as, must be champion or ability
 """
 from pprint import pprint
 import sys
@@ -14,8 +14,8 @@ from . import Inibin
 KINDS = {
     'a': 'as_ability',
     'ability': 'as_ability',
-    'c': 'as_character',
-    'character': 'as_character',
+    'c': 'as_champion',
+    'champion': 'as_champion',
 }
 
 def main():

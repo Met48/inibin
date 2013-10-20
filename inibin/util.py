@@ -55,14 +55,14 @@ def _fix_keys(key_mapping, inibin, string_table=None):
 
                 # Try numeric conversion
                 # Inibins often store numbers in strings
-                if isinstance(val, str):
+                if isinstance(val, bytes):
                     try:
                         val = int(val)
                     except ValueError:
                         try:
                             val = float(val)
                         except ValueError:
-                            pass
+                            val = val.decode('utf8')
 
                 # Check if value is a reference to a fontconfig key
                 if val in string_table:

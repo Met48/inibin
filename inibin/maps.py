@@ -2,13 +2,13 @@
 Standard mappings of inibin keys.
 """
 
-__all__ = ['CHARACTER', 'ABILITY']
+__all__ = ['CHAMPION', 'ABILITY']
 
 # Helper functions
 MULT_5 = lambda x: x * 5
 PERCENTAGE = lambda x: float(x * 10) if isinstance(x, int) else x * 100
 
-# Character mapping
+# Champion mapping
 # Unmapped keys:
 #   'tags': -148652351,  # Comma-delimited
 #   'lore': -51751813,
@@ -17,7 +17,7 @@ PERCENTAGE = lambda x: float(x * 10) if isinstance(x, int) else x * 100
 #   'tips_as': 70667385,
 #   'tips_against': 70667386,
 #   'title': -547924932,
-CHARACTER = {
+CHAMPION = {
     'stats': {
         # Bases do not include level one per-level bonus
         #   (with the exception of apsd)

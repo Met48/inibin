@@ -10,7 +10,7 @@ Champion and ability inibins are supported.
 try:
     from functools import reduce
 except ImportError:
-    pass
+    from __builtin__ import reduce
 try:
     from StringIO import StringIO
 except ImportError:
@@ -24,23 +24,23 @@ class Inibin(dict):
     """
     Inibin reader.
 
-    Does not support all flags yet, but covers typical use cases.
-
     """
     # Flag constants
-    # Flags are listed in the order their data appears in the file.
-    # Each line (bit_mask, [quantity,] function_or_format)
+    # Not all flags are supported, but this set covers the most common.
+    # It is not clear which flags, if any, have signed values.
+    # Flags are listed in the order their data sections appear in the file.
+    # Each line is (bit_mask, [quantity,] function_or_format)
     FLAGS = [
-        (0b0000000000000001, 'i'),  # Signed?
+        (0b0000000000000001, 'i'),
         (0b0000000000000010, 'f'),
         (0b0000000000000100, 'b', lambda x: float(x) / 10),  # Integer divided by 10
-        (0b0000000000001000, 'h'),  # Short. Signed?
-        (0b0000000000010000, 'b'),  # 1-byte integer. Signed?
+        (0b0000000000001000, 'h'),  # Short
+        (0b0000000000010000, 'b'),  # 1-byte integer
         (0b0000000000100000, _take_bits),  # 1-bit booleans, 8 per byte
         (0b0000000001000000, 3, 'b'),  # RGB Color?
-        (0b0000000010000000, 3, 'i'),  # ?
+        (0b0000000010000000, 3, 'i'),  # Unknown
         (0b0000010000000000, 4, 'b'),  # RGBA Color?
-        (0b0001000000000000, None),  # String offsets, processed by _lookup_in_string_table
+        (0b0001000000000000, None),  # String offsets, processed by _read_string_table
     ]
     RECOGNIZED_FLAGS = reduce(lambda a, b: a | b, (f[0] for f in FLAGS), 0)
 
@@ -67,9 +67,9 @@ class Inibin(dict):
         self.clear()
         self.update(data)
 
-    def as_character(self, string_table=None):
-        """Return a dictionary of the inibin interpreted as a character."""
-        return self._translate(maps.CHARACTER, string_table)
+    def as_champion(self, string_table=None):
+        """Return a dictionary of the inibin interpreted as a champion."""
+        return self._translate(maps.CHAMPION, string_table)
 
     def as_ability(self, string_table=None):
         """Return a dictionary of the inibin interpreted as an ability."""
@@ -96,13 +96,14 @@ class Inibin(dict):
 
             mapping_update = self._process_flag(row)
             for key, value in mapping_update.items():
+                # Do not overwrite any keys
                 assert key not in data
                 data[key] = value
 
         # There should be no non-padding bytes remaining
-        remaining = self.buffer.read()
-        if len(remaining) > 0 and not all(c == '\x00' for c in remaining):
-            raise IOError("%i bytes remaining" % len(remaining))
+        remaining = bytearray(self.buffer.read())
+        if any(c == 0 for c in remaining):
+            raise IOError("Finished reading but not at EOF")
 
         return data
 
@@ -136,7 +137,7 @@ class Inibin(dict):
             flag_definition = [flag_definition[0]] + list(flag_definition[2:])
 
         # Read values
-        if isinstance(flag_definition[1], basestring):
+        if isinstance(flag_definition[1], str):
             values = _unpack_from(self.buffer, flag_definition[1], per_count * count)
 
             # Apply row functions (if any)
@@ -167,6 +168,6 @@ class Inibin(dict):
         keys = _unpack_from(self.buffer, 'i', count)
         offsets = _unpack_from(self.buffer, 'H', count)
         strings = self.buffer.read(self.string_table_length)
-        values = [strings[v:].partition('\x00')[0] for v in offsets]
+        values = [strings[v:].partition(bytearray([0]))[0] for v in offsets]
 
         return dict(zip(keys, values))
