@@ -8,11 +8,16 @@ Champion and ability inibins are supported.
 """
 
 try:
+    from functools import reduce
+except ImportError:
+    pass
+try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
 
-from util import _unpack_from, _take_bits, _fix_keys
+from .util import _unpack_from, _take_bits, _fix_keys
+from . import maps
 
 
 class Inibin(dict):
@@ -40,7 +45,7 @@ class Inibin(dict):
     RECOGNIZED_FLAGS = reduce(lambda a, b: a | b, (f[0] for f in FLAGS), 0)
 
     version = 0
-    str_len = 0
+    string_table_length = 0
     flags = 0
 
     def __init__(self, buffer, font_config=None,
@@ -61,15 +66,19 @@ class Inibin(dict):
 
         data = self._read_inibin()
 
-        if fix_keys:
-            import maps
-            from maps import CHARACTER, ABILITY
-
-            assert hasattr(maps, kind)
-            data = _fix_keys(getattr(maps, kind), data, font_config)
-
         self.clear()
         self.update(data)
+
+    def as_character(self, string_lookup):
+        """Interpret the inibin as a character file. """
+        self._translate(maps.CHARACTER, string_lookup)
+
+    def as_ability(self, string_lookup):
+        """Interpret the inibin as an ability file. """
+        self._translate(maps.ABILITY, string_lookup)
+
+    def _translate(self, key_mapping, string_lookup):
+        return _fix_keys(key_mapping, self, string_lookup)
 
     def _read_inibin(self):
         self._read_header()
@@ -103,8 +112,8 @@ class Inibin(dict):
         if not self.version == 2:
             raise ValueError("Invalid version number: %s" % self.version)
 
-        # TODO: Do not put str_len on class
-        self.str_len = _unpack_from(self.buffer, 'H')
+        # TODO: Do not put string_table_length on class
+        self.string_table_length = _unpack_from(self.buffer, 'H')
 
         self.flags = _unpack_from(self.buffer, 'H')
 
@@ -158,7 +167,7 @@ class Inibin(dict):
         count = _unpack_from(self.buffer, 'H')
         keys = _unpack_from(self.buffer, 'i', count)
         offsets = _unpack_from(self.buffer, 'H', count)
-        strings = self.buffer.read(self.str_len)
+        strings = self.buffer.read(self.string_table_length)
         values = [strings[v:].partition('\x00')[0] for v in offsets]
 
         return dict(zip(keys, values))
