@@ -1,12 +1,3 @@
-"""
-A reader for the inibin file format.
-
-One function, read_inibin, is exported for use. It will read the file buffer,
-parse the inibin, and map the inibin keys to have human-readable names.
-
-Champion and ability inibins are supported.
-"""
-
 try:
     from functools import reduce
 except ImportError:
