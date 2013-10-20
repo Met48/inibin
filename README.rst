@@ -1,6 +1,10 @@
-# Inibin reader
+=============
+Inibin reader
+=============
 
 A module for reading League of Legends inibin files.
+
+::
 
     Usage:
       python -m inibin <file>
