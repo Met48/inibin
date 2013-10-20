@@ -10,6 +10,7 @@ except ImportError:
 from .util import _unpack_from, _take_bits, _fix_keys
 from . import maps
 
+__all__ = ['Inibin']
 
 class Inibin(dict):
     """

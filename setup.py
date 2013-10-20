@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(
     name='inibin',
     packages=['inibin'],
-    version='0.1.0',
+    version='0.1.1',
     url='http://github.com/Met48/inibin',
     license='MIT',
     author='Andrew Sutton',
