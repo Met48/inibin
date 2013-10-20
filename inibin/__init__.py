@@ -7,7 +7,7 @@ parse the inibin, and map the inibin keys to have human-readable names.
 Champion and ability inibins are supported.
 """
 
-from .reader import read_inibin
+from .reader import Inibin
 
 __all__ = ['read_inibin']
 
@@ -23,8 +23,8 @@ def main():
     else:
         fix_keys = False
         kind = None
-    mapping = read_inibin(data, {}, kind, fix_keys)
-    pprint(mapping)
+    inibin = Inibin(data, {}, kind, fix_keys)
+    pprint(inibin.data)
 
 
 if __name__ == '__main__':
